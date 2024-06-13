@@ -104,15 +104,15 @@ list_scanner = env.Scanner(function=list_files_scan)
 
 # -- Get a list of all the verilog files in the src folfer, in ASCII, with
 # -- the full path. All these files are used for the simulation
-v_nodes = Glob('*.v')
+v_nodes = Glob('*.v') + Glob('*.sv')
 v_files = [str(f) for f in v_nodes]
 
 # Construct disjoint lists of .v module and testbench files.
-src_synth = [f for f in v_files if f[-5:].upper() != '_TB.V']
-list_tb = [f for f in v_files if f[-5:].upper() == '_TB.V']
+src_synth = [f for f in v_files if f[-6:].upper().find('_TB.') < 0]
+list_tb = [f for f in v_files if f[-6:].upper().find('_TB.') >= 0]
 
 if len(src_synth) == 0:
-    print('Error: no verilog module files found (.v)')
+    print('Error: no verilog module files found (.v / .sv)')
     Exit(1)
 
 # -- Get the LPF file
@@ -134,7 +134,7 @@ synth_builder = Builder(
         '' if VERBOSE_ALL or VERBOSE_YOSYS else '-q'
     ),
     suffix='.json',
-    src_suffix='.v',
+    src_suffix=['.v', '.sv'],
     source_scanner=list_scanner)
 env.Append(BUILDERS={'Synth': synth_builder})
 
@@ -203,7 +203,7 @@ def iverilog_generator(source, target, env, for_signature):
     #     end
     is_interactive_sim = is_testbench and 'sim' in COMMAND_LINE_TARGETS
     interactive_sim_flag = f'-D INTERACTIVE_SIM' if is_interactive_sim else ""
-    result = 'iverilog {0} -o $TARGET {1} {2} -D NO_INCLUDES "{3}/ecp5/cells_bb.v" "{3}/ecp5/cells_sim.v" $SOURCES'.format(
+    result = 'iverilog {0} -g2012 -o $TARGET {1} {2} -D NO_INCLUDES "{3}/ecp5/cells_bb.v" "{3}/ecp5/cells_sim.v" $SOURCES'.format(
         IVER_PATH, vcd_output_flag, interactive_sim_flag, YOSYS_PATH)
     return result
 
@@ -211,7 +211,7 @@ iverilog_builder = Builder(
     # Action string is computed automatically by the generator.
     generator = iverilog_generator,
     suffix='.out',
-    src_suffix='.v',
+    src_suffix=['.v', '.sv'],
     source_scanner=list_scanner)
 env.Append(BUILDERS={'IVerilog': iverilog_builder})
 
@@ -221,7 +221,7 @@ dot_builder = Builder(
         '' if VERBOSE_ALL else '-q'
     ),
     suffix='.dot',
-    src_suffix='.v',
+    src_suffix=['.v', '.sv'],
     source_scanner=list_scanner)
 env.Append(BUILDERS={'DOT': dot_builder})
 
@@ -235,7 +235,7 @@ env.Append(BUILDERS={'SVG': svg_builder})
 
 # NOTE: output file name is defined in the iverilog call using VCD_OUTPUT macro
 vcd_builder = Builder(
-    action='vvp {0} $SOURCE'.format(
+    action='vvp {0} $SOURCE -dumpfile=$TARGET'.format(
         VVP_PATH),
     suffix='.vcd',
     src_suffix='.out')
@@ -333,7 +333,7 @@ verilator_builder = Builder(
         '-Wno-style' if VERILATOR_NO_STYLE else '',
         VERILATOR_PARAM_STR if VERILATOR_PARAM_STR else '',
         '--top-module ' + VERILATOR_TOP if VERILATOR_TOP else ''),
-    src_suffix='.v',
+    src_suffix=['.v', '.sv'],
     source_scanner=list_scanner)
 env.Append(BUILDERS={'Verilator': verilator_builder})
 
